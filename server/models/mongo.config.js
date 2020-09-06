@@ -11,7 +11,12 @@ if (!mongodbUrl) {
   return;
 }
 
-mongoose.connect(mongodbUrl);
+mongoose.connect(mongodbUrl, {
+  useUnifiedTopology: true,
+  useCreateIndex: true,
+  useNewUrlParser: true,
+  useFindAndModify: false,
+});
 const db = mongoose.connection;
 
 db.on("error", console.error.bind(console, "connection error:"));

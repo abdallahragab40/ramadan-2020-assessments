@@ -1,4 +1,6 @@
 let listOfVideos = document.getElementById("listOfRequests");
+let sortBy = "newFirst";
+let searchTerm = "";
 
 function getSingleVideo(videoInfo, isPrepend = false) {
   let videoContainerElm = document.createElement("div");
@@ -71,8 +73,10 @@ function getSingleVideo(videoInfo, isPrepend = false) {
   });
 }
 
-function loadAllVidReqs(sortBy = "newFirst") {
-  fetch(`http://localhost:7777/video-request?sortBy=${sortBy}`)
+function loadAllVidReqs(sortBy = "newFirst", searchTerm = "") {
+  fetch(
+    `http://localhost:7777/video-request?sortBy=${sortBy}&searchTerm=${searchTerm}`
+  )
     .then((res) => res.json())
     .then((data) => {
       listOfVideos.innerHTML = "";
@@ -82,17 +86,68 @@ function loadAllVidReqs(sortBy = "newFirst") {
     });
 }
 
+function checkValidity(formData) {
+  const name = formData.get("author_name");
+  const email = formData.get("author_email");
+  const topic = formData.get("topic_title");
+  const topicDetails = formData.get("topic_details");
+
+  if (!name) {
+    document.querySelector("[name=author_name]").classList.add("is-invalid");
+  }
+
+  const emailPattern = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  if (!email || !emailPattern.test(email)) {
+    document.querySelector("[name=author_email]").classList.add("is-invalid");
+  }
+
+  if (!topic || topic.length > 30) {
+    document.querySelector("[name=topic_title]").classList.add("is-invalid");
+  }
+
+  if (!topicDetails) {
+    document.querySelector("[name=topic_details]").classList.add("is-invalid");
+  }
+
+  const allInvalidElms = document
+    .querySelector("#formVideoReq")
+    .querySelectorAll(".is-invalid");
+
+  if (allInvalidElms.length) {
+    allInvalidElms.forEach((elm) => {
+      elm.addEventListener("input", function () {
+        this.classList.remove("is-invalid");
+      });
+    });
+    return false;
+  }
+
+  return true;
+}
+
+function debounce(fn, time) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn.apply(this, args), time);
+  };
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   let formVideoReq = document.getElementById("formVideoReq");
   const sortByElms = document.querySelectorAll("[id*=sort_by_]");
+  const searchBoxElm = document.getElementById("search_box");
 
   loadAllVidReqs();
 
   sortByElms.forEach(function (element) {
     element.addEventListener("click", function (e) {
       e.preventDefault();
-      const sortBy = element.value;
-      loadAllVidReqs(sortBy);
+
+      sortBy = element.value;
+
+      loadAllVidReqs(sortBy, searchTerm);
+
       element.parentNode.classList.add("active");
       if (sortBy === "topVotedFirst") {
         document
@@ -106,10 +161,21 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
+  searchBoxElm.addEventListener(
+    "input",
+    debounce((e) => {
+      searchTerm = e.target.value;
+      loadAllVidReqs(sortBy, searchTerm);
+    }, 300)
+  );
+
   formVideoReq.addEventListener("submit", function (e) {
     e.preventDefault();
 
     const formData = new FormData(formVideoReq);
+
+    const isValid = checkValidity(formData);
+    if (!isValid) return;
 
     fetch("http://localhost:7777/video-request", {
       method: "POST",
