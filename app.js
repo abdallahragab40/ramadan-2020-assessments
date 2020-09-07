@@ -1,6 +1,10 @@
 let listOfVideos = document.getElementById("listOfRequests");
-let sortBy = "newFirst";
-let searchTerm = "";
+
+const state = {
+  sortBy: "newFirst",
+  searchTerm: "",
+  userId: "",
+};
 
 function getSingleVideo(videoInfo, isPrepend = false) {
   let videoContainerElm = document.createElement("div");
@@ -20,7 +24,7 @@ function getSingleVideo(videoInfo, isPrepend = false) {
       <div class="d-flex flex-column text-center">
         <a id="votes_ups_${videoInfo._id}" class="btn btn-link">🔺</a>
         <h3 id="score_vote_${videoInfo._id}">${
-    videoInfo.votes.ups - videoInfo.votes.downs
+    videoInfo.votes.ups.length - videoInfo.votes.downs.length
   }</h3>
         <a id="votes_downs_${videoInfo._id}" class="btn btn-link">🔻</a>
       </div>
@@ -44,32 +48,32 @@ function getSingleVideo(videoInfo, isPrepend = false) {
     ? listOfVideos.prepend(videoContainerElm)
     : listOfVideos.appendChild(videoContainerElm);
 
-  const voteUpsElm = document.getElementById(`votes_ups_${videoInfo._id}`);
-  const voteDownsElm = document.getElementById(`votes_downs_${videoInfo._id}`);
+  applyVoteStyle(videoInfo._id, videoInfo.votes);
+
   const scoreVoteElm = document.getElementById(`score_vote_${videoInfo._id}`);
+  const votesElms = document.querySelectorAll(
+    `[id^=votes_][id$=_${videoInfo._id}]`
+  );
 
-  voteUpsElm.addEventListener("click", (e) => {
-    fetch("http://localhost:7777/video-request/vote", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id: videoInfo._id, vote_type: "ups" }),
-    })
-      .then((bolb) => bolb.json())
-      .then((data) => (scoreVoteElm.innerText = data.ups - data.downs));
-  });
+  votesElms.forEach((elm) => {
+    elm.addEventListener("click", function (e) {
+      e.preventDefault();
 
-  voteDownsElm.addEventListener("click", (e) => {
-    fetch("http://localhost:7777/video-request/vote", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id: videoInfo._id, vote_type: "downs" }),
-    })
-      .then((bolb) => bolb.json())
-      .then((data) => (scoreVoteElm.innerText = data.ups - data.downs));
+      const [, vote_type, id] = e.target.getAttribute("id").split("_");
+
+      fetch("http://localhost:7777/video-request/vote", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id, vote_type, user_id: state.userId }),
+      })
+        .then((bolb) => bolb.json())
+        .then((data) => {
+          scoreVoteElm.innerText = data.ups.length - data.downs.length;
+          applyVoteStyle(id, data, vote_type);
+        });
+    });
   });
 }
 
@@ -87,19 +91,19 @@ function loadAllVidReqs(sortBy = "newFirst", searchTerm = "") {
 }
 
 function checkValidity(formData) {
-  const name = formData.get("author_name");
-  const email = formData.get("author_email");
+  // const name = formData.get("author_name");
+  // const email = formData.get("author_email");
   const topic = formData.get("topic_title");
   const topicDetails = formData.get("topic_details");
 
-  if (!name) {
-    document.querySelector("[name=author_name]").classList.add("is-invalid");
-  }
+  // if (!name) {
+  //   document.querySelector("[name=author_name]").classList.add("is-invalid");
+  // }
 
-  const emailPattern = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-  if (!email || !emailPattern.test(email)) {
-    document.querySelector("[name=author_email]").classList.add("is-invalid");
-  }
+  // const emailPattern = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  // if (!email || !emailPattern.test(email)) {
+  //   document.querySelector("[name=author_email]").classList.add("is-invalid");
+  // }
 
   if (!topic || topic.length > 30) {
     document.querySelector("[name=topic_title]").classList.add("is-invalid");
@@ -133,10 +137,43 @@ function debounce(fn, time) {
   };
 }
 
+function applyVoteStyle(video_id, votes_list, vote_type) {
+  if (!vote_type) {
+    if (votes_list.ups.includes(state.userId)) {
+      vote_type = "ups";
+    } else if (votes_list.downs.includes(state.userId)) {
+      vote_type = "downs";
+    } else {
+      return;
+    }
+  }
+
+  const voteUpsElm = document.getElementById(`votes_ups_${video_id}`);
+  const voteDownsElm = document.getElementById(`votes_downs_${video_id}`);
+
+  const voteDirElm = vote_type === "ups" ? voteUpsElm : voteDownsElm;
+  const otherDirElm = vote_type === "ups" ? voteDownsElm : voteUpsElm;
+
+  if (votes_list[vote_type].includes(state.userId)) {
+    voteDirElm.style.opacity = 1;
+    otherDirElm.style.opacity = 0.5;
+  } else {
+    otherDirElm.style.opacity = 1;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   let formVideoReq = document.getElementById("formVideoReq");
   const sortByElms = document.querySelectorAll("[id*=sort_by_]");
   const searchBoxElm = document.getElementById("search_box");
+
+  const loginFormElm = document.querySelector(".login-form");
+  const appContentElm = document.querySelector(".app-content");
+  if (window.location.search) {
+    state.userId = new URLSearchParams(window.location.search).get("id");
+    loginFormElm.classList.add("d-none");
+    appContentElm.classList.remove("d-none");
+  }
 
   loadAllVidReqs();
 
@@ -144,12 +181,12 @@ document.addEventListener("DOMContentLoaded", function () {
     element.addEventListener("click", function (e) {
       e.preventDefault();
 
-      sortBy = element.value;
+      state.sortBy = element.value;
 
-      loadAllVidReqs(sortBy, searchTerm);
+      loadAllVidReqs(state.sortBy, state.searchTerm);
 
       element.parentNode.classList.add("active");
-      if (sortBy === "topVotedFirst") {
+      if (state.sortBy === "topVotedFirst") {
         document
           .getElementById("sort_by_new")
           .parentNode.classList.remove("active");
@@ -164,8 +201,8 @@ document.addEventListener("DOMContentLoaded", function () {
   searchBoxElm.addEventListener(
     "input",
     debounce((e) => {
-      searchTerm = e.target.value;
-      loadAllVidReqs(sortBy, searchTerm);
+      state.searchTerm = e.target.value;
+      loadAllVidReqs(state.sortBy, state.searchTerm);
     }, 300)
   );
 
@@ -173,6 +210,7 @@ document.addEventListener("DOMContentLoaded", function () {
     e.preventDefault();
 
     const formData = new FormData(formVideoReq);
+    formData.append("author_id", state.userId);
 
     const isValid = checkValidity(formData);
     if (!isValid) return;
